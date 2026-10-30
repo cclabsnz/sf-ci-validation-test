@@ -1,0 +1,43 @@
+name: Validate Salesforce changes
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out the merge request
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Install Salesforce CLI
+        run: npm install @salesforce/cli --global
+
+      - name: Log in to the validation sandbox
+        env:
+          SF_JWT_KEY: ${{ secrets.SF_JWT_KEY }}
+        run: |
+          printf '%s\n' "$SF_JWT_KEY" > server.key
+          sf org login jwt \
+            --client-id "${{ secrets.SF_CLIENT_ID }}" \
+            --jwt-key-file server.key \
+            --username "${{ secrets.SF_USERNAME }}" \
+            --instance-url "${{ secrets.SF_INSTANCE_URL }}" \
+            --alias validate
+          rm server.key
+
+      - name: Validate the changes
+        run: |
+          sf project deploy start \
+            --source-dir force-app \
+            --target-org validate \
+            --dry-run \
+            --test-level RunLocalTests \
+            --wait 45
